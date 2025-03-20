@@ -30,14 +30,14 @@ class AuthProvider with ChangeNotifier {
   User? _user;
   String _errorMessage = '';
 
-  /// Constructeur avec injection du service d'authentification
+  // Constructeur avec injection du service d'authentification
   AuthProvider({AuthService? authService})
-    : _authService = authService ?? AuthService() {
+      : _authService = authService ?? AuthService() {
     // Vérifier l'état d'authentification au démarrage
     _checkAuthStatus();
   }
 
-  /// Getters pour les propriétés
+  // Getters pour les propriétés
   AuthStatus get status => _status;
   User? get user => _user;
   String get errorMessage => _errorMessage;
@@ -45,7 +45,7 @@ class AuthProvider with ChangeNotifier {
   bool get isAuthenticating => _status == AuthStatus.authenticating;
   bool get isAdmin => _user?.isAdmin ?? false;
 
-  /// Méthode pour vérifier l'état d'authentification
+  // Méthode pour vérifier l'état d'authentification
   Future<void> _checkAuthStatus() async {
     _status = AuthStatus.authenticating;
     notifyListeners();
@@ -59,6 +59,7 @@ class AuthProvider with ChangeNotifier {
         _status = AuthStatus.unauthenticated;
       }
     } catch (e) {
+      print('Erreur lors de la vérification de l\'authentification: $e');
       _status = AuthStatus.unauthenticated;
       _errorMessage = e.toString();
     }
@@ -66,7 +67,7 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Méthode pour se connecter
+  // Méthode pour se connecter
   Future<bool> login(String email, String password) async {
     _status = AuthStatus.authenticating;
     _errorMessage = '';
@@ -94,7 +95,7 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Méthode pour s'inscrire
+  // Méthode pour s'inscrire
   Future<bool> register(
     String name,
     String email,
@@ -132,7 +133,7 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Méthode pour se déconnecter
+  // Méthode pour se déconnecter
   Future<void> logout() async {
     try {
       await _authService.logout();
@@ -145,7 +146,7 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Méthode pour rafraîchir les données de l'utilisateur
+  // Méthode pour rafraîchir les données de l'utilisateur
   Future<void> refreshUserData() async {
     try {
       _user = await _authService.getCurrentUser();

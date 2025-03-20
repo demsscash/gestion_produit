@@ -3,10 +3,12 @@ import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../providers/auth_provider.dart';
-import '../../../utils/validators.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/category_provider.dart';
+import '../../providers/product_provider.dart';
+import '../../utils/validators.dart';
 import '../home/home_screen.dart';
-import '../auth/register_screen.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,6 +31,24 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // Méthode pour précharger les données après connexion
+  Future<void> _preloadData(BuildContext context) async {
+    try {
+      // Préchargement des produits
+      final productProvider =
+          Provider.of<ProductProvider>(context, listen: false);
+      await productProvider.loadProducts();
+
+      // Préchargement des catégories
+      final categoryProvider =
+          Provider.of<CategoryProvider>(context, listen: false);
+      await categoryProvider.loadCategories();
+    } catch (e) {
+      // Gérer les erreurs silencieusement
+      print('Erreur lors du préchargement des données: $e');
+    }
+  }
+
   // Méthode pour gérer la connexion
   Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
@@ -42,7 +62,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (success) {
+        // Précharger les données avant de naviguer vers l'écran principal
+        await _preloadData(context);
+
         // Redirection vers l'écran principal
+        if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomeScreen()),
         );

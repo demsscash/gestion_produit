@@ -15,7 +15,7 @@ class ApiService {
   }
 
   // Méthode GET
-  Future<Map<String, dynamic>> get(
+  Future<dynamic> get(
     String endpoint, {
     bool requiresAuth = true,
   }) async {
@@ -27,6 +27,7 @@ class ApiService {
       );
       return _processResponse(response);
     } catch (e) {
+      print('Erreur lors de la requête GET à $endpoint: $e');
       throw ErrorHandler.handleError(e);
     }
   }
@@ -46,6 +47,7 @@ class ApiService {
       );
       return _processResponse(response);
     } catch (e) {
+      print('Erreur lors de la requête POST à $endpoint: $e');
       throw ErrorHandler.handleError(e);
     }
   }
@@ -65,6 +67,7 @@ class ApiService {
       );
       return _processResponse(response);
     } catch (e) {
+      print('Erreur lors de la requête PUT à $endpoint: $e');
       throw ErrorHandler.handleError(e);
     }
   }
@@ -82,6 +85,7 @@ class ApiService {
       );
       return _processResponse(response);
     } catch (e) {
+      print('Erreur lors de la requête DELETE à $endpoint: $e');
       throw ErrorHandler.handleError(e);
     }
   }
@@ -98,7 +102,9 @@ class ApiService {
       if (token != null) {
         headers['Authorization'] = 'Bearer $token';
       } else {
-        throw Exception('Authentification requise');
+        print(
+            'Token manquant pour une requête nécessitant une authentification');
+        // Ne pas lancer d'exception ici pour permettre le fallback vers les endpoints publics
       }
     }
 
@@ -106,7 +112,7 @@ class ApiService {
   }
 
   // Traite la réponse HTTP
-  Map<String, dynamic> _processResponse(http.Response response) {
+  dynamic _processResponse(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) {
         return {};

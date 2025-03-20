@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
+import '../providers/product_provider.dart';
+import '../providers/category_provider.dart';
 import 'auth/login_screen.dart';
 import 'home/home_screen.dart';
 
@@ -43,20 +45,43 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
+  // Préchargement des données
+  Future<void> _preloadData() async {
+    try {
+      // Préchargement des produits
+      final productProvider =
+          Provider.of<ProductProvider>(context, listen: false);
+      await productProvider.loadProducts();
+
+      // Préchargement des catégories
+      final categoryProvider =
+          Provider.of<CategoryProvider>(context, listen: false);
+      await categoryProvider.loadCategories();
+    } catch (e) {
+      // Gérer les erreurs silencieusement
+      print('Erreur lors du préchargement des données: $e');
+    }
+  }
+
   // Vérifier si l'utilisateur est connecté
-  void _checkAuthStatus() {
+  void _checkAuthStatus() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     if (authProvider.isAuthenticated) {
+      // Précharger les données avant de naviguer
+      await _preloadData();
+
+      if (!mounted) return;
+
       // Rediriger vers l'écran principal si l'utilisateur est connecté
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()));
     } else {
+      if (!mounted) return;
+
       // Rediriger vers l'écran de connexion si l'utilisateur n'est pas connecté
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const LoginScreen()));
     }
   }
 

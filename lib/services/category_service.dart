@@ -9,44 +9,86 @@ class CategoryService {
   final AuthService _authService;
 
   CategoryService({ApiService? apiService, AuthService? authService})
-    : _apiService = apiService ?? ApiService(),
-      _authService = authService ?? AuthService();
+      : _apiService = apiService ?? ApiService(),
+        _authService = authService ?? AuthService();
 
   // Récupération de toutes les catégories
   Future<List<Category>> getCategories({int? page, int? perPage}) async {
     bool isAuthenticated = await _authService.isAuthenticated();
-    String endpoint =
-        isAuthenticated ? ApiConfig.categories : ApiConfig.publicCategories;
+    String endpoint = ApiConfig.categories;
 
     if (page != null && perPage != null) {
       endpoint += '?page=$page&per_page=$perPage';
     }
 
-    final response = await _apiService.get(
-      endpoint,
-      requiresAuth: isAuthenticated,
-    );
+    try {
+      final response = await _apiService.get(
+        endpoint,
+        requiresAuth: isAuthenticated,
+      );
 
-    List<dynamic> categoriesJson =
-        response is List ? response : response['data'] ?? [];
+      List<dynamic> categoriesJson =
+          response is List ? response : response['data'] ?? [];
 
-    return categoriesJson
-        .map((categoryJson) => Category.fromJson(categoryJson))
-        .toList();
+      return categoriesJson
+          .map((categoryJson) => Category.fromJson(categoryJson))
+          .toList();
+    } catch (e) {
+      // Si la requête authentifiée échoue, essayer avec l'endpoint public
+      if (isAuthenticated) {
+        try {
+          String publicEndpoint = ApiConfig.publicCategories;
+          if (page != null && perPage != null) {
+            publicEndpoint += '?page=$page&per_page=$perPage';
+          }
+
+          final response = await _apiService.get(
+            publicEndpoint,
+            requiresAuth: false,
+          );
+
+          List<dynamic> categoriesJson =
+              response is List ? response : response['data'] ?? [];
+
+          return categoriesJson
+              .map((categoryJson) => Category.fromJson(categoryJson))
+              .toList();
+        } catch (_) {
+          rethrow;
+        }
+      }
+      rethrow;
+    }
   }
 
   // Récupération d'une catégorie spécifique
   Future<Category> getCategory(int id) async {
     bool isAuthenticated = await _authService.isAuthenticated();
-    String endpoint =
-        isAuthenticated ? ApiConfig.category(id) : ApiConfig.publicCategory(id);
+    String endpoint = ApiConfig.category(id);
 
-    final response = await _apiService.get(
-      endpoint,
-      requiresAuth: isAuthenticated,
-    );
+    try {
+      final response = await _apiService.get(
+        endpoint,
+        requiresAuth: isAuthenticated,
+      );
 
-    return Category.fromJson(response);
+      return Category.fromJson(response);
+    } catch (e) {
+      // Si la requête authentifiée échoue, essayer avec l'endpoint public
+      if (isAuthenticated) {
+        try {
+          final response = await _apiService.get(
+            ApiConfig.publicCategory(id),
+            requiresAuth: false,
+          );
+
+          return Category.fromJson(response);
+        } catch (_) {
+          rethrow;
+        }
+      }
+      rethrow;
+    }
   }
 
   // Récupération des produits d'une catégorie spécifique
@@ -56,26 +98,50 @@ class CategoryService {
     int? perPage,
   }) async {
     bool isAuthenticated = await _authService.isAuthenticated();
-    String endpoint =
-        isAuthenticated
-            ? ApiConfig.categoryProducts(id)
-            : ApiConfig.publicCategoryProducts(id);
+    String endpoint = ApiConfig.categoryProducts(id);
 
     if (page != null && perPage != null) {
       endpoint += '?page=$page&per_page=$perPage';
     }
 
-    final response = await _apiService.get(
-      endpoint,
-      requiresAuth: isAuthenticated,
-    );
+    try {
+      final response = await _apiService.get(
+        endpoint,
+        requiresAuth: isAuthenticated,
+      );
 
-    List<dynamic> productsJson =
-        response is List ? response : response['data'] ?? [];
+      List<dynamic> productsJson =
+          response is List ? response : response['data'] ?? [];
 
-    return productsJson
-        .map((productJson) => Product.fromJson(productJson))
-        .toList();
+      return productsJson
+          .map((productJson) => Product.fromJson(productJson))
+          .toList();
+    } catch (e) {
+      // Si la requête authentifiée échoue, essayer avec l'endpoint public
+      if (isAuthenticated) {
+        try {
+          String publicEndpoint = ApiConfig.publicCategoryProducts(id);
+          if (page != null && perPage != null) {
+            publicEndpoint += '?page=$page&per_page=$perPage';
+          }
+
+          final response = await _apiService.get(
+            publicEndpoint,
+            requiresAuth: false,
+          );
+
+          List<dynamic> productsJson =
+              response is List ? response : response['data'] ?? [];
+
+          return productsJson
+              .map((productJson) => Product.fromJson(productJson))
+              .toList();
+        } catch (_) {
+          rethrow;
+        }
+      }
+      rethrow;
+    }
   }
 
   // Création d'une catégorie (nécessite authentification admin)
