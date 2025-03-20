@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/auth_provider.dart';
 import '../../../utils/validators.dart';
-import '../../home/home_screen.dart';
-import '../register_screen.dart';
+import '../home/home_screen.dart';
+import '../auth/register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -146,24 +146,22 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           Checkbox(
                             value: _rememberMe,
-                            onChanged:
-                                isLoading
-                                    ? null
-                                    : (value) {
-                                      setState(() {
-                                        _rememberMe = value!;
-                                      });
-                                    },
+                            onChanged: isLoading
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _rememberMe = value!;
+                                    });
+                                  },
                           ),
                           const Text('Se souvenir de moi'),
                           const Spacer(),
                           TextButton(
-                            onPressed:
-                                isLoading
-                                    ? null
-                                    : () {
-                                      // TODO: Implémenter la récupération de mot de passe
-                                    },
+                            onPressed: isLoading
+                                ? null
+                                : () {
+                                    // TODO: Implémenter la récupération de mot de passe
+                                  },
                             child: const Text('Mot de passe oublié?'),
                           ),
                         ],
@@ -176,17 +174,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child:
-                            isLoading
-                                ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : const Text('SE CONNECTER'),
+                        child: isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('SE CONNECTER'),
                       ),
                       const SizedBox(height: 16),
 
@@ -202,11 +199,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             closedColor: Colors.transparent,
                             closedElevation: 0,
                             openElevation: 0,
-                            closedBuilder:
-                                (context, action) => TextButton(
-                                  onPressed: isLoading ? null : action,
-                                  child: const Text('S\'inscrire'),
-                                ),
+                            closedBuilder: (context, action) => TextButton(
+                              onPressed: isLoading ? null : action,
+                              child: const Text('S\'inscrire'),
+                            ),
                             openBuilder: (context, _) => const RegisterScreen(),
                           ),
                         ],

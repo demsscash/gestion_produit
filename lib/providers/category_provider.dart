@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 
 import '../models/category.dart';
 import '../models/product.dart';
@@ -28,33 +27,12 @@ class CategoryProvider with ChangeNotifier {
   /// Message d'erreur
   String _errorMessage = '';
 
-  /// Contrôleur de pagination pour l'infinite scroll
-  final PagingController<int, Category> pagingController = PagingController(
-    firstPageKey: 1,
-  );
-
-  /// Contrôleur de pagination pour les produits d'une catégorie
-  final PagingController<int, Product> productsPagingController =
-      PagingController(firstPageKey: 1);
-
   /// Nombre d'éléments par page
   final int _pageSize = 10;
 
   /// Constructeur avec injection du service de catégories
   CategoryProvider({CategoryService? categoryService})
-    : _categoryService = categoryService ?? CategoryService() {
-    // Configurer le contrôleur de pagination
-    pagingController.addPageRequestListener((pageKey) {
-      _fetchCategoriesPage(pageKey);
-    });
-
-    // Configurer le contrôleur de pagination pour les produits
-    productsPagingController.addPageRequestListener((pageKey) {
-      if (_selectedCategory != null) {
-        _fetchCategoryProductsPage(_selectedCategory!.id, pageKey);
-      }
-    });
-  }
+      : _categoryService = categoryService ?? CategoryService();
 
   /// Getters pour les propriétés
   List<Category> get categories => _categories;
@@ -87,25 +65,6 @@ class CategoryProvider with ChangeNotifier {
       }
 
       notifyListeners();
-    }
-  }
-
-  /// Méthode pour charger les catégories avec pagination
-  Future<void> _fetchCategoriesPage(int pageKey) async {
-    try {
-      final newCategories = await _categoryService.getCategories(
-        page: pageKey,
-        perPage: _pageSize,
-      );
-
-      final isLastPage = newCategories.length < _pageSize;
-      if (isLastPage) {
-        pagingController.appendLastPage(newCategories);
-      } else {
-        pagingController.appendPage(newCategories, pageKey + 1);
-      }
-    } catch (e) {
-      pagingController.error = e;
     }
   }
 
@@ -160,26 +119,6 @@ class CategoryProvider with ChangeNotifier {
       }
 
       notifyListeners();
-    }
-  }
-
-  /// Méthode pour charger les produits d'une catégorie avec pagination
-  Future<void> _fetchCategoryProductsPage(int categoryId, int pageKey) async {
-    try {
-      final newProducts = await _categoryService.getCategoryProducts(
-        categoryId,
-        page: pageKey,
-        perPage: _pageSize,
-      );
-
-      final isLastPage = newProducts.length < _pageSize;
-      if (isLastPage) {
-        productsPagingController.appendLastPage(newProducts);
-      } else {
-        productsPagingController.appendPage(newProducts, pageKey + 1);
-      }
-    } catch (e) {
-      productsPagingController.error = e;
     }
   }
 
@@ -300,7 +239,6 @@ class CategoryProvider with ChangeNotifier {
   /// Méthode pour sélectionner une catégorie
   void selectCategory(Category category) {
     _selectedCategory = category;
-    productsPagingController.refresh();
     notifyListeners();
   }
 
@@ -320,17 +258,10 @@ class CategoryProvider with ChangeNotifier {
 
   /// Méthode pour rafraîchir les données
   Future<void> refresh() async {
-    pagingController.refresh();
+    await loadCategories();
     if (_selectedCategory != null) {
-      productsPagingController.refresh();
+      await loadCategoryProducts(_selectedCategory!.id);
     }
     clearErrors();
-  }
-
-  @override
-  void dispose() {
-    pagingController.dispose();
-    productsPagingController.dispose();
-    super.dispose();
   }
 }

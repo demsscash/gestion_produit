@@ -47,26 +47,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      
+
       final success = await authProvider.register(
         _nameController.text,
         _emailController.text,
         _passwordController.text,
         _passwordConfirmationController.text,
       );
-      
+
       if (!mounted) return;
-      
+
       if (success) {
         // Affichage d'un message de succès
         Flushbar(
           title: 'Succès',
-          message: 'Inscription réussie. Vous pouvez maintenant vous connecter.',
+          message:
+              'Inscription réussie. Vous pouvez maintenant vous connecter.',
           duration: const Duration(seconds: 3),
           backgroundColor: Colors.green,
           flushbarPosition: FlushbarPosition.TOP,
         ).show(context);
-        
+
         // Redirection vers l'écran de connexion après un court délai
         Future.delayed(const Duration(seconds: 2), () {
           Navigator.of(context).pushReplacement(
@@ -90,7 +91,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final isLoading = authProvider.isAuthenticating;
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inscription'),
@@ -122,7 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
-                
+
                 // Formulaire d'inscription
                 Form(
                   key: _formKey,
@@ -142,7 +143,49 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         enabled: !isLoading,
                       ),
                       const SizedBox(height: 16),
-                      
+
+                      // Champ email
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email),
+                          hintText: 'Entrez votre adresse email',
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        validator: Validators.validateEmail,
+                        enabled: !isLoading,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Champ mot de passe
+                      TextFormField(
+                        controller: _passwordController,
+                        decoration: InputDecoration(
+                          labelText: 'Mot de passe',
+                          prefixIcon: const Icon(Icons.lock),
+                          hintText: 'Créez un mot de passe',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _isPasswordVisible
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _isPasswordVisible = !_isPasswordVisible;
+                              });
+                            },
+                          ),
+                        ),
+                        obscureText: !_isPasswordVisible,
+                        textInputAction: TextInputAction.next,
+                        validator: Validators.validatePassword,
+                        enabled: !isLoading,
+                      ),
+                      const SizedBox(height: 16),
+
                       // Champ confirmation de mot de passe
                       TextFormField(
                         controller: _passwordConfirmationController,
@@ -158,21 +201,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             onPressed: () {
                               setState(() {
-                                _isPasswordConfirmationVisible = !_isPasswordConfirmationVisible;
+                                _isPasswordConfirmationVisible =
+                                    !_isPasswordConfirmationVisible;
                               });
                             },
                           ),
                         ),
                         obscureText: !_isPasswordConfirmationVisible,
                         textInputAction: TextInputAction.done,
-                        validator: (value) => Validators.validatePasswordConfirmation(
+                        validator: (value) =>
+                            Validators.validatePasswordConfirmation(
                           value,
                           _passwordController.text,
                         ),
                         enabled: !isLoading,
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Conditions d'utilisation
                       Row(
                         children: [
@@ -190,7 +235,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             child: RichText(
                               text: TextSpan(
                                 text: 'J\'accepte les ',
-                                style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
+                                style: TextStyle(
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color),
                                 children: const [
                                   TextSpan(
                                     text: 'conditions d\'utilisation',
@@ -206,7 +255,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Bouton d'inscription
                       ElevatedButton(
                         onPressed: isLoading ? null : _register,
@@ -225,7 +274,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             : const Text('S\'INSCRIRE'),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Option de connexion
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -255,46 +304,4 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
   }
-}: 16),
-                      
-                      // Champ email
-                      TextFormField(
-                        controller: _emailController,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email),
-                          hintText: 'Entrez votre adresse email',
-                        ),
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        validator: Validators.validateEmail,
-                        enabled: !isLoading,
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Champ mot de passe
-                      TextFormField(
-                        controller: _passwordController,
-                        decoration: InputDecoration(
-                          labelText: 'Mot de passe',
-                          prefixIcon: const Icon(Icons.lock),
-                          hintText: 'Créez un mot de passe',
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _isPasswordVisible
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isPasswordVisible = !_isPasswordVisible;
-                              });
-                            },
-                          ),
-                        ),
-                        obscureText: !_isPasswordVisible,
-                        textInputAction: TextInputAction.next,
-                        validator: Validators.validatePassword,
-                        enabled: !isLoading,
-                      ),
-                      const SizedBox(height
+}

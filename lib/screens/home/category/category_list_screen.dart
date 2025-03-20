@@ -1,6 +1,5 @@
 import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
-import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -19,6 +18,9 @@ class CategoryListScreen extends StatefulWidget {
 class _CategoryListScreenState extends State<CategoryListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isLoading = false;
+  List<Category> _categories = [];
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -31,8 +33,11 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
       });
 
       // Rafraîchir les résultats
-      _refreshList();
+      _loadCategories();
     });
+
+    // Charger les catégories au démarrage
+    _loadCategories();
   }
 
   @override
@@ -41,13 +46,35 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
     super.dispose();
   }
 
-  // Méthode pour rafraîchir la liste
-  void _refreshList() {
-    final categoryProvider = Provider.of<CategoryProvider>(
-      context,
-      listen: false,
-    );
-    categoryProvider.refresh();
+  // Méthode pour charger les catégories
+  Future<void> _loadCategories() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final categoryProvider = Provider.of<CategoryProvider>(
+        context,
+        listen: false,
+      );
+
+      await categoryProvider.loadCategories();
+
+      if (!mounted) return;
+
+      setState(() {
+        _categories = categoryProvider.categories;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   // Méthode pour supprimer une catégorie
@@ -55,30 +82,34 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
     // Demander confirmation
     final confirm = await showDialog<bool>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Confirmation'),
-            content: Text(
-              'Voulez-vous vraiment supprimer la catégorie "${category.name}" ?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('ANNULER'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('SUPPRIMER'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmation'),
+        content: Text(
+          'Voulez-vous vraiment supprimer la catégorie "${category.name}" ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('ANNULER'),
           ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('SUPPRIMER'),
+          ),
+        ],
+      ),
     );
 
     if (confirm == true) {
+      setState(() {
+        _isLoading = true;
+      });
+
       final categoryProvider = Provider.of<CategoryProvider>(
         context,
         listen: false,
       );
+
       final success = await categoryProvider.deleteCategory(category.id);
 
       if (!mounted) return;
@@ -90,7 +121,14 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
             backgroundColor: Colors.green,
           ),
         );
+
+        // Recharger les catégories
+        _loadCategories();
       } else {
+        setState(() {
+          _isLoading = false;
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(categoryProvider.errorMessage),
@@ -101,10 +139,24 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
     }
   }
 
+  // Filtrer les catégories en fonction de la recherche
+  List<Category> get _filteredCategories {
+    if (_searchQuery.isEmpty) {
+      return _categories;
+    }
+
+    return _categories
+        .where((category) =>
+            category.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            (category.description != null &&
+                category.description!
+                    .toLowerCase()
+                    .contains(_searchQuery.toLowerCase())))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final categoryProvider = Provider.of<CategoryProvider>(context);
-
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -117,15 +169,14 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                 decoration: InputDecoration(
                   hintText: 'Rechercher une catégorie...',
                   prefixIcon: const Icon(Icons.search),
-                  suffixIcon:
-                      _searchQuery.isNotEmpty
-                          ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _searchController.clear();
-                            },
-                          )
-                          : null,
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                          },
+                        )
+                      : null,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -133,126 +184,153 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
               ),
             ),
 
-            // Liste des catégories avec pagination
+            // Liste des catégories
             Expanded(
               child: RefreshIndicator(
-                onRefresh: () async => _refreshList(),
-                child: PagedListView<int, Category>(
-                  pagingController: categoryProvider.pagingController,
-                  builderDelegate: PagedChildBuilderDelegate<Category>(
-                    itemBuilder: (context, category, index) {
-                      // Élément de liste de catégorie avec animation d'ouverture
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 4.0,
-                        ),
-                        child: OpenContainer(
-                          transitionDuration: const Duration(milliseconds: 500),
-                          closedShape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          closedElevation: 2,
-                          openBuilder:
-                              (context, _) =>
-                                  CategoryDetailScreen(category: category),
-                          closedBuilder: (context, openContainer) {
-                            return CategoryListItem(
-                              category: category,
-                              onTap: openContainer,
-                              onEdit: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => CategoryFormScreen(
-                                          category: category,
-                                        ),
-                                  ),
-                                );
-                              },
-                              onDelete: () => _deleteCategory(category),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                    // État vide
-                    firstPageErrorIndicatorBuilder:
-                        (context) => Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.error_outline,
-                                color: Colors.red,
-                                size: 60,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Erreur: ${categoryProvider.errorMessage}',
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _refreshList,
-                                child: const Text('Réessayer'),
-                              ),
-                            ],
-                          ),
-                        ),
-                    // État de chargement
-                    firstPageProgressIndicatorBuilder:
-                        (context) => ListView.builder(
-                          itemCount: 5,
-                          itemBuilder: (context, index) {
-                            return const CategoryShimmerItem();
-                          },
-                        ),
-                    // État sans données
-                    noItemsFoundIndicatorBuilder:
-                        (context) => Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.category_outlined,
-                                color: Colors.grey,
-                                size: 60,
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Aucune catégorie trouvée',
-                                style: TextStyle(fontSize: 18),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Ajoutez une nouvelle catégorie pour commencer',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder:
-                                          (_) => const CategoryFormScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.add),
-                                label: const Text('Ajouter une catégorie'),
-                              ),
-                            ],
-                          ),
-                        ),
-                  ),
-                ),
+                onRefresh: _loadCategories,
+                child: _isLoading
+                    ? _buildLoadingList()
+                    : _errorMessage.isNotEmpty
+                        ? _buildErrorWidget()
+                        : _filteredCategories.isEmpty
+                            ? _buildEmptyState()
+                            : _buildCategoryList(),
               ),
             ),
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.of(context)
+              .push(
+                MaterialPageRoute(
+                  builder: (_) => const CategoryFormScreen(),
+                ),
+              )
+              .then((_) => _loadCategories());
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  // Widget pour l'état de chargement
+  Widget _buildLoadingList() {
+    return ListView.builder(
+      itemCount: 5,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      itemBuilder: (context, index) {
+        return const CategoryShimmerItem();
+      },
+    );
+  }
+
+  // Widget pour l'état d'erreur
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: 60,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Erreur: $_errorMessage',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadCategories,
+            child: const Text('Réessayer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget pour l'état vide
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.category_outlined,
+            color: Colors.grey,
+            size: 60,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Aucune catégorie trouvée',
+            style: TextStyle(fontSize: 18),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Ajoutez une nouvelle catégorie pour commencer',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context)
+                  .push(
+                    MaterialPageRoute(
+                      builder: (_) => const CategoryFormScreen(),
+                    ),
+                  )
+                  .then((_) => _loadCategories());
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Ajouter une catégorie'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget pour la liste des catégories
+  Widget _buildCategoryList() {
+    return ListView.builder(
+      itemCount: _filteredCategories.length,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      itemBuilder: (context, index) {
+        final category = _filteredCategories[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: OpenContainer(
+            transitionDuration: const Duration(milliseconds: 500),
+            closedShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            closedElevation: 2,
+            openBuilder: (context, _) =>
+                CategoryDetailScreen(category: category),
+            closedBuilder: (context, openContainer) {
+              return CategoryListItem(
+                category: category,
+                onTap: openContainer,
+                onEdit: () {
+                  Navigator.of(context)
+                      .push(
+                        MaterialPageRoute(
+                          builder: (_) => CategoryFormScreen(
+                            category: category,
+                          ),
+                        ),
+                      )
+                      .then((_) => _loadCategories());
+                },
+                onDelete: () => _deleteCategory(category),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
@@ -279,9 +357,7 @@ class CategoryListItem extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         leading: CircleAvatar(
-          backgroundColor: Theme.of(
-            context,
-          ).colorScheme.primary.withOpacity(0.2),
+          backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(50),
           child: const Icon(Icons.category),
         ),
         title: Text(
@@ -291,10 +367,10 @@ class CategoryListItem extends StatelessWidget {
         subtitle:
             category.description != null && category.description!.isNotEmpty
                 ? Text(
-                  category.description!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                )
+                    category.description!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
                 : null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -326,7 +402,7 @@ class CategoryShimmerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      padding: const EdgeInsets.only(bottom: 8.0),
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(16.0),

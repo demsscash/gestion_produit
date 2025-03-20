@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 
 import '../models/product.dart';
 import '../services/product_service.dart';
@@ -24,22 +23,12 @@ class ProductProvider with ChangeNotifier {
   /// Message d'erreur
   String _errorMessage = '';
 
-  /// Contrôleur de pagination pour l'infinite scroll
-  final PagingController<int, Product> pagingController = PagingController(
-    firstPageKey: 1,
-  );
-
   /// Nombre d'éléments par page
   final int _pageSize = 10;
 
   /// Constructeur avec injection du service de produits
   ProductProvider({ProductService? productService})
-    : _productService = productService ?? ProductService() {
-    // Configurer le contrôleur de pagination
-    pagingController.addPageRequestListener((pageKey) {
-      _fetchProductsPage(pageKey);
-    });
-  }
+      : _productService = productService ?? ProductService();
 
   /// Getters pour les propriétés
   List<Product> get products => _products;
@@ -71,25 +60,6 @@ class ProductProvider with ChangeNotifier {
       }
 
       notifyListeners();
-    }
-  }
-
-  /// Méthode pour charger les produits avec pagination
-  Future<void> _fetchProductsPage(int pageKey) async {
-    try {
-      final newProducts = await _productService.getProducts(
-        page: pageKey,
-        perPage: _pageSize,
-      );
-
-      final isLastPage = newProducts.length < _pageSize;
-      if (isLastPage) {
-        pagingController.appendLastPage(newProducts);
-      } else {
-        pagingController.appendPage(newProducts, pageKey + 1);
-      }
-    } catch (e) {
-      pagingController.error = e;
     }
   }
 
@@ -227,6 +197,41 @@ class ProductProvider with ChangeNotifier {
     }
   }
 
+  /// Méthode pour rechercher des produits
+  Future<void> searchProducts({
+    String? query,
+    int? categoryId,
+    double? minPrice,
+    double? maxPrice,
+  }) async {
+    _isLoading = true;
+    _hasError = false;
+    _errorMessage = '';
+    notifyListeners();
+
+    try {
+      _products = await _productService.searchProducts(
+        query: query,
+        categoryId: categoryId,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+      );
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      _hasError = true;
+
+      if (e is ApiException) {
+        _errorMessage = e.message;
+      } else {
+        _errorMessage = 'Erreur lors de la recherche: ${e.toString()}';
+      }
+
+      notifyListeners();
+    }
+  }
+
   /// Méthode pour sélectionner un produit
   void selectProduct(Product product) {
     _selectedProduct = product;
@@ -248,13 +253,7 @@ class ProductProvider with ChangeNotifier {
 
   /// Méthode pour rafraîchir les données
   Future<void> refresh() async {
-    pagingController.refresh();
+    await loadProducts();
     clearErrors();
-  }
-
-  @override
-  void dispose() {
-    pagingController.dispose();
-    super.dispose();
   }
 }

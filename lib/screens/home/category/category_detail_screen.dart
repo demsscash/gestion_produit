@@ -7,7 +7,6 @@ import '../../../models/product.dart';
 import '../../../providers/category_provider.dart';
 import '../../../utils/theme.dart';
 import '../product/product_detail_screen.dart';
-import 'category_form_screen.dart';
 
 class CategoryDetailScreen extends StatefulWidget {
   final Category category;
@@ -70,11 +69,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
             icon: const Icon(Icons.edit),
             onPressed: () {
               Navigator.of(context)
-                  .push(
-                    MaterialPageRoute(
-                      builder:
-                          (_) => CategoryFormScreen(category: widget.category),
-                    ),
+                  .pushNamed(
+                    '/category/edit',
+                    arguments: widget.category,
                   )
                   .then((_) => _loadCategoryProducts());
             },
@@ -90,7 +87,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20.0),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.primary.withAlpha(25),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -100,9 +97,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withOpacity(0.2),
+                      color:
+                          Theme.of(context).colorScheme.primary.withAlpha(50),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -191,21 +187,21 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                     )
                   // Aucun produit
                   else if (_products.isEmpty)
-                    Center(
+                    const Center(
                       child: Column(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.inventory_2_outlined,
                             size: 50,
                             color: Colors.grey,
                           ),
-                          const SizedBox(height: 16),
-                          const Text(
+                          SizedBox(height: 16),
+                          Text(
                             'Aucun produit dans cette catégorie',
                             style: TextStyle(fontSize: 16),
                           ),
-                          const SizedBox(height: 8),
-                          const Text(
+                          SizedBox(height: 8),
+                          Text(
                             'Ajoutez des produits à cette catégorie pour les voir ici',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.grey),
@@ -264,16 +260,14 @@ class ProductItem extends StatelessWidget {
                 width: 70,
                 height: 70,
                 fit: BoxFit.cover,
-                placeholder:
-                    (context, url) => Container(
-                      color: Colors.grey[200],
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                errorWidget:
-                    (context, url, error) => Container(
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.broken_image),
-                    ),
+                placeholder: (context, url) => Container(
+                  color: Colors.grey[200],
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  color: Colors.grey[200],
+                  child: const Icon(Icons.broken_image),
+                ),
               ),
             ),
             const SizedBox(width: 16),

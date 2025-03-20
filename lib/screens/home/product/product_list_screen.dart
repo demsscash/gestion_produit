@@ -1,11 +1,11 @@
 import 'package:animations/animations.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../../models/product.dart';
+import '../../../providers/category_provider.dart';
 import '../../../providers/product_provider.dart';
 import '../../../utils/theme.dart';
 import 'product_detail_screen.dart';
@@ -22,7 +22,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _sortBy = 'name';
-  int? _filterCategoryId;
+  int? _selectedCategoryId;
+  bool _isLoading = false;
+  List<Product> _products = [];
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -35,8 +38,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
       });
 
       // Rafraîchir les résultats
-      _refreshList();
+      _loadProducts();
     });
+
+    // Charger les produits au démarrage
+    _loadProducts();
   }
 
   @override
@@ -45,21 +51,42 @@ class _ProductListScreenState extends State<ProductListScreen> {
     super.dispose();
   }
 
-  // Méthode pour rafraîchir la liste
-  void _refreshList() {
-    final productProvider = Provider.of<ProductProvider>(
-      context,
-      listen: false,
-    );
-    productProvider.refresh();
-  }
-
-  // Méthode pour changer le tri
-  void _changeSorting(String sortBy) {
+  // Méthode pour charger les produits
+  Future<void> _loadProducts() async {
     setState(() {
-      _sortBy = sortBy;
+      _isLoading = true;
+      _errorMessage = '';
     });
-    _refreshList();
+
+    try {
+      final productProvider = Provider.of<ProductProvider>(
+        context,
+        listen: false,
+      );
+
+      if (_searchQuery.isEmpty && _selectedCategoryId == null) {
+        await productProvider.loadProducts();
+      } else {
+        await productProvider.searchProducts(
+          query: _searchQuery.isNotEmpty ? _searchQuery : null,
+          categoryId: _selectedCategoryId,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _products = productProvider.products;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   // Méthode pour supprimer un produit
@@ -67,30 +94,34 @@ class _ProductListScreenState extends State<ProductListScreen> {
     // Demander confirmation
     final confirm = await showDialog<bool>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Confirmation'),
-            content: Text(
-              'Voulez-vous vraiment supprimer le produit "${product.name}" ?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('ANNULER'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('SUPPRIMER'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmation'),
+        content: Text(
+          'Voulez-vous vraiment supprimer le produit "${product.name}" ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('ANNULER'),
           ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('SUPPRIMER'),
+          ),
+        ],
+      ),
     );
 
     if (confirm == true) {
+      setState(() {
+        _isLoading = true;
+      });
+
       final productProvider = Provider.of<ProductProvider>(
         context,
         listen: false,
       );
+
       final success = await productProvider.deleteProduct(product.id);
 
       if (!mounted) return;
@@ -102,7 +133,14 @@ class _ProductListScreenState extends State<ProductListScreen> {
             backgroundColor: Colors.green,
           ),
         );
+
+        // Recharger les produits
+        _loadProducts();
       } else {
+        setState(() {
+          _isLoading = false;
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(productProvider.errorMessage),
@@ -113,35 +151,75 @@ class _ProductListScreenState extends State<ProductListScreen> {
     }
   }
 
+  // Méthode pour changer le tri
+  void _changeSorting(String sortBy) {
+    setState(() {
+      _sortBy = sortBy;
+    });
+
+    // Trier les produits
+    _sortProducts();
+  }
+
+  // Méthode pour trier les produits
+  void _sortProducts() {
+    setState(() {
+      switch (_sortBy) {
+        case 'name':
+          _products.sort((a, b) => a.name.compareTo(b.name));
+          break;
+        case 'price_asc':
+          _products.sort((a, b) => a.price.compareTo(b.price));
+          break;
+        case 'price_desc':
+          _products.sort((a, b) => b.price.compareTo(a.price));
+          break;
+        case 'newest':
+          _products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          break;
+      }
+    });
+  }
+
+  // Méthode pour filtrer par catégorie
+  void _filterByCategory(int? categoryId) {
+    setState(() {
+      _selectedCategoryId = categoryId;
+    });
+
+    _loadProducts();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final productProvider = Provider.of<ProductProvider>(context);
+    // Obtenez les catégories pour le filtre
+    final categoryProvider = Provider.of<CategoryProvider>(context);
+    final categories = categoryProvider.categories;
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            // Barre de recherche et filtres
+            // Barre de recherche
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Barre de recherche
+                  // Champ de recherche
                   TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'Rechercher un produit...',
                       prefixIcon: const Icon(Icons.search),
-                      suffixIcon:
-                          _searchQuery.isNotEmpty
-                              ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  _searchController.clear();
-                                },
-                              )
-                              : null,
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                              },
+                            )
+                          : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -150,163 +228,245 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   const SizedBox(height: 16),
 
                   // Options de tri et filtres
-                  Row(
-                    children: [
-                      // Menu de tri
-                      PopupMenuButton<String>(
-                        initialValue: _sortBy,
-                        child: Chip(
-                          avatar: const Icon(Icons.sort, size: 18),
-                          label: Text('Trier par: ${_getSortLabel(_sortBy)}'),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        // Menu de tri
+                        InkWell(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => SimpleDialog(
+                                title: const Text('Trier par'),
+                                children: [
+                                  SimpleDialogOption(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      _changeSorting('name');
+                                    },
+                                    child: const Text('Nom'),
+                                  ),
+                                  SimpleDialogOption(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      _changeSorting('price_asc');
+                                    },
+                                    child: const Text('Prix croissant'),
+                                  ),
+                                  SimpleDialogOption(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      _changeSorting('price_desc');
+                                    },
+                                    child: const Text('Prix décroissant'),
+                                  ),
+                                  SimpleDialogOption(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      _changeSorting('newest');
+                                    },
+                                    child: const Text('Plus récent'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          child: Chip(
+                            avatar: const Icon(Icons.sort, size: 18),
+                            label: Text('Trier par: ${_getSortLabel(_sortBy)}'),
+                          ),
                         ),
-                        onSelected: _changeSorting,
-                        itemBuilder:
-                            (context) => [
-                              const PopupMenuItem(
-                                value: 'name',
-                                child: Text('Nom'),
-                              ),
-                              const PopupMenuItem(
-                                value: 'price_asc',
-                                child: Text('Prix croissant'),
-                              ),
-                              const PopupMenuItem(
-                                value: 'price_desc',
-                                child: Text('Prix décroissant'),
-                              ),
-                              const PopupMenuItem(
-                                value: 'newest',
-                                child: Text('Plus récent'),
-                              ),
-                            ],
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
 
-                      // Filtres par catégorie
-                      // TODO: Implémenter le filtre par catégorie
-                    ],
+                        // Filtre par catégorie
+                        if (categories.isNotEmpty)
+                          InkWell(
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => SimpleDialog(
+                                  title: const Text('Filtrer par catégorie'),
+                                  children: [
+                                    SimpleDialogOption(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _filterByCategory(null);
+                                      },
+                                      child:
+                                          const Text('Toutes les catégories'),
+                                    ),
+                                    ...categories.map(
+                                      (category) => SimpleDialogOption(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          _filterByCategory(category.id);
+                                        },
+                                        child: Text(category.name),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            child: Chip(
+                              avatar: const Icon(Icons.filter_list, size: 18),
+                              label: Text(_selectedCategoryId == null
+                                  ? 'Catégorie: Toutes'
+                                  : 'Catégorie: ${categories.firstWhere((c) => c.id == _selectedCategoryId, orElse: () => categories.first).name}'),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // Liste des produits avec pagination
+            // Liste des produits
             Expanded(
               child: RefreshIndicator(
-                onRefresh: () async => _refreshList(),
-                child: PagedListView<int, Product>(
-                  pagingController: productProvider.pagingController,
-                  builderDelegate: PagedChildBuilderDelegate<Product>(
-                    itemBuilder: (context, product, index) {
-                      // Élément de liste de produit avec animation d'ouverture
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 4.0,
-                        ),
-                        child: OpenContainer(
-                          transitionDuration: const Duration(milliseconds: 500),
-                          closedShape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          closedElevation: 2,
-                          openBuilder:
-                              (context, _) =>
-                                  ProductDetailScreen(product: product),
-                          closedBuilder: (context, openContainer) {
-                            return ProductListItem(
-                              product: product,
-                              onEdit: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) =>
-                                            ProductFormScreen(product: product),
-                                  ),
-                                );
-                              },
-                              onDelete: () => _deleteProduct(product),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                    // État vide
-                    firstPageErrorIndicatorBuilder:
-                        (context) => Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.error_outline,
-                                color: Colors.red,
-                                size: 60,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Erreur: ${productProvider.errorMessage}',
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _refreshList,
-                                child: const Text('Réessayer'),
-                              ),
-                            ],
-                          ),
-                        ),
-                    // État de chargement
-                    firstPageProgressIndicatorBuilder:
-                        (context) => ListView.builder(
-                          itemCount: 5,
-                          itemBuilder: (context, index) {
-                            return const ProductShimmerItem();
-                          },
-                        ),
-                    // État sans données
-                    noItemsFoundIndicatorBuilder:
-                        (context) => Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.inventory_2_outlined,
-                                color: Colors.grey,
-                                size: 60,
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Aucun produit trouvé',
-                                style: TextStyle(fontSize: 18),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Essayez de modifier vos filtres ou ajoutez un nouveau produit',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const ProductFormScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.add),
-                                label: const Text('Ajouter un produit'),
-                              ),
-                            ],
-                          ),
-                        ),
-                  ),
-                ),
+                onRefresh: _loadProducts,
+                child: _isLoading
+                    ? _buildLoadingList()
+                    : _errorMessage.isNotEmpty
+                        ? _buildErrorWidget()
+                        : _products.isEmpty
+                            ? _buildEmptyState()
+                            : _buildProductList(),
               ),
             ),
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.of(context)
+              .push(
+                MaterialPageRoute(
+                  builder: (_) => const ProductFormScreen(),
+                ),
+              )
+              .then((_) => _loadProducts());
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  // Widget pour l'état de chargement
+  Widget _buildLoadingList() {
+    return ListView.builder(
+      itemCount: 5,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      itemBuilder: (context, index) {
+        return const ProductShimmerItem();
+      },
+    );
+  }
+
+  // Widget pour l'état d'erreur
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: 60,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Erreur: $_errorMessage',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadProducts,
+            child: const Text('Réessayer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget pour l'état vide
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.inventory_2_outlined,
+            color: Colors.grey,
+            size: 60,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Aucun produit trouvé',
+            style: TextStyle(fontSize: 18),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Essayez de modifier vos filtres ou ajoutez un nouveau produit',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context)
+                  .push(
+                    MaterialPageRoute(
+                      builder: (_) => const ProductFormScreen(),
+                    ),
+                  )
+                  .then((_) => _loadProducts());
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Ajouter un produit'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget pour la liste des produits
+  Widget _buildProductList() {
+    return ListView.builder(
+      itemCount: _products.length,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      itemBuilder: (context, index) {
+        final product = _products[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: OpenContainer(
+            transitionDuration: const Duration(milliseconds: 500),
+            closedShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            closedElevation: 2,
+            openBuilder: (context, _) => ProductDetailScreen(product: product),
+            closedBuilder: (context, openContainer) {
+              return ProductListItem(
+                product: product,
+                onTap: openContainer,
+                onEdit: () {
+                  Navigator.of(context)
+                      .push(
+                        MaterialPageRoute(
+                          builder: (_) => ProductFormScreen(product: product),
+                        ),
+                      )
+                      .then((_) => _loadProducts());
+                },
+                onDelete: () => _deleteProduct(product),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -330,12 +490,14 @@ class _ProductListScreenState extends State<ProductListScreen> {
 // Widget pour l'élément de liste de produit
 class ProductListItem extends StatelessWidget {
   final Product product;
+  final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const ProductListItem({
     super.key,
     required this.product,
+    required this.onTap,
     required this.onEdit,
     required this.onDelete,
   });
@@ -389,7 +551,7 @@ class ProductListItem extends StatelessWidget {
                     ),
                   const SizedBox(height: 8),
 
-                  // Prix et stock
+                  // Prix et catégories
                   Row(
                     children: [
                       Text(
@@ -406,10 +568,9 @@ class ProductListItem extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color:
-                              product.stock > 0
-                                  ? Colors.green[100]
-                                  : Colors.red[100],
+                          color: product.stock > 0
+                              ? Colors.green[100]
+                              : Colors.red[100],
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -418,15 +579,45 @@ class ProductListItem extends StatelessWidget {
                               : 'Rupture',
                           style: TextStyle(
                             fontSize: 12,
-                            color:
-                                product.stock > 0
-                                    ? Colors.green[800]
-                                    : Colors.red[800],
+                            color: product.stock > 0
+                                ? Colors.green[800]
+                                : Colors.red[800],
                           ),
                         ),
                       ),
                     ],
                   ),
+                  if (product.categories.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Wrap(
+                        spacing: 4,
+                        children: product.categories
+                            .take(2)
+                            .map(
+                              (category) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primary
+                                      .withAlpha(30),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  category.name,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -456,6 +647,36 @@ class ProductListItem extends StatelessWidget {
   }
 }
 
+// Widget pour afficher un placeholder d'image
+class ProductImagePlaceholder extends StatelessWidget {
+  const ProductImagePlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 80,
+      height: 80,
+      color: Colors.grey[200],
+      child: const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+// Widget pour afficher une erreur d'image
+class ProductImageError extends StatelessWidget {
+  const ProductImageError({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 80,
+      height: 80,
+      color: Colors.grey[200],
+      child: const Center(child: Icon(Icons.broken_image)),
+    );
+  }
+}
+
 // Widget pour le chargement
 class ProductShimmerItem extends StatelessWidget {
   const ProductShimmerItem({super.key});
@@ -463,7 +684,7 @@ class ProductShimmerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      padding: const EdgeInsets.only(bottom: 8.0),
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(12.0),
@@ -582,36 +803,6 @@ class ProductShimmerItem extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-// Widget pour afficher un placeholder d'image
-class ProductImagePlaceholder extends StatelessWidget {
-  const ProductImagePlaceholder({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 80,
-      height: 80,
-      color: Colors.grey[200],
-      child: Center(child: Icon(Icons.image, color: Colors.grey[400])),
-    );
-  }
-}
-
-// Widget pour afficher une erreur d'image
-class ProductImageError extends StatelessWidget {
-  const ProductImageError({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 80,
-      height: 80,
-      color: Colors.grey[200],
-      child: Center(child: Icon(Icons.broken_image, color: Colors.grey[600])),
     );
   }
 }
